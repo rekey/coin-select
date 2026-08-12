@@ -1,12 +1,28 @@
 """ccxt 封装: 全市场 USDT 永续 ticker 与 OHLCV, 含限速与重试."""
 import logging
 import time
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
 
+def rewrite_api_urls(exchange, api_base: str) -> None:
+    """把 exchange 所有 API URL 的 host 替换为 api_base (保留协议与路径).
+
+    用于通过反代域名访问币安 (如 bapi.beasi.top), 规避地域限制.
+    """
+    api = getattr(exchange, "urls", {}).get("api")
+    if not api:
+        return
+    for key, url in api.items():
+        parsed = urlparse(url)
+        if parsed.scheme and parsed.netloc:
+            api[key] = f"{parsed.scheme}://{api_base}{parsed.path}"
+
+
 class Fetcher:
-    def __init__(self, exchange=None, rate_limit: float = 0.25, max_retries: int = 2):
+    def __init__(self, exchange=None, rate_limit: float = 0.25, max_retries: int = 2,
+                 api_base: str | None = None):
         if exchange is None:
             import ccxt
 
@@ -14,6 +30,9 @@ class Fetcher:
         self.exchange = exchange
         self.rate_limit = rate_limit
         self.max_retries = max_retries
+        if api_base:
+            rewrite_api_urls(exchange, api_base)
+            logger.info(f"币安 API host 已替换为 {api_base}")
 
     def _usdt_swap_pairs(self) -> set[str]:
         markets = self.exchange.load_markets()

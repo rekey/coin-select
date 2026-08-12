@@ -13,17 +13,18 @@ logger = logging.getLogger("coin_selector")
 
 def _add_common(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--exchange", default="binance", help="交易所 id (默认 binance)")
+    ap.add_argument("--api-base", default=None, help="币安 API 反代域名 (如 bapi.beasi.top, 替换官方域名 host, 保留路径)")
     ap.add_argument("--verbose", action="store_true", help="详细日志")
 
 
 def _build_fetcher(args: argparse.Namespace) -> Fetcher:
-    """按 --exchange 构造 Fetcher; 默认 binance 时无参构造 (内置 ccxt binance swap)."""
+    """按 --exchange/--api-base 构造 Fetcher; 默认 binance 时无参构造 (内置 ccxt binance swap)."""
     if args.exchange and args.exchange != "binance":
         import ccxt
 
         cls = getattr(ccxt, args.exchange)
-        return Fetcher(exchange=cls({"options": {"defaultType": "swap"}}))
-    return Fetcher()
+        return Fetcher(exchange=cls({"options": {"defaultType": "swap"}}), api_base=args.api_base)
+    return Fetcher(api_base=args.api_base)
 
 
 def build_parser() -> argparse.ArgumentParser:

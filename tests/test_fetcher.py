@@ -1,5 +1,39 @@
-from coin_selector.fetcher import Fetcher
+from coin_selector.fetcher import Fetcher, rewrite_api_urls
 from tests.conftest import FakeExchange, make_market
+
+
+def test_rewrite_api_urls_replaces_host_keeps_path():
+    ex = FakeExchange()
+    ex.urls = {
+        "api": {
+            "public": "https://api.binance.com/api/v3",
+            "fapiPublic": "https://fapi.binance.com/fapi/v1",
+            "dapiPublic": "https://dapi.binance.com/dapi/v1",
+        }
+    }
+    rewrite_api_urls(ex, "bapi.beasi.top")
+    assert ex.urls["api"]["public"] == "https://bapi.beasi.top/api/v3"
+    assert ex.urls["api"]["fapiPublic"] == "https://bapi.beasi.top/fapi/v1"
+    assert ex.urls["api"]["dapiPublic"] == "https://bapi.beasi.top/dapi/v1"
+
+
+def test_fetcher_api_base_applied_to_exchange():
+    ex = FakeExchange()
+    ex.urls = {
+        "api": {
+            "public": "https://api.binance.com/api/v3",
+            "fapiPublic": "https://fapi.binance.com/fapi/v1",
+        }
+    }
+    Fetcher(exchange=ex, api_base="bapi.beasi.top")
+    assert ex.urls["api"]["public"].startswith("https://bapi.beasi.top/")
+
+
+def test_fetcher_no_api_base_keeps_original():
+    ex = FakeExchange()
+    ex.urls = {"api": {"public": "https://api.binance.com/api/v3"}}
+    Fetcher(exchange=ex)
+    assert ex.urls["api"]["public"] == "https://api.binance.com/api/v3"
 
 
 def test_fetch_tickers_returns_usdt_swap_only():

@@ -16,6 +16,8 @@ jobs:
   select-pairs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      API_BASE: bapi.beasi.top  # 币安 API 反代域名 (须转发 /api/ 与 /fapi/ 路径)
     steps:
       - uses: actions/checkout@v4
 
@@ -28,11 +30,11 @@ jobs:
 
       - name: 币安 API 连通性探测
         run: |
-          curl -fsS --max-time 10 https://api3.binance.com/api/v3/ping >/dev/null
-          echo "币安 API 可达"
+          curl -fsS --max-time 10 "https://$API_BASE/fapi/v1/ping" >/dev/null
+          echo "币安合约 API 可达 ($API_BASE)"
 
       - name: 运行选币
-        run: python -m coin_selector --out ./out --report ./out/selection_report.csv
+        run: python -m coin_selector --api-base "$API_BASE" --out ./out --report ./out/selection_report.csv
 
       - name: 结果变化则提交并推送
         id: commit

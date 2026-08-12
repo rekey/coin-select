@@ -14,7 +14,7 @@
 ## 环境要求
 
 - Python >= 3.11（宿主机实测 3.13）
-- 可访问 Binance API（默认 `api3.binance.com`）
+- 可访问 Binance API（默认 `api3.binance.com`；受限网络可用 `--api-base` 走反代域名）
 
 ## 安装
 
@@ -86,6 +86,7 @@ cd coin-selector
 | `--refresh-period` | 300 | pairlist 刷新周期（秒），与 freqtrade RemotePairList 轮询节奏一致 |
 | `--weights` | `0.45,0.30,0.25` | 权重（趋势/动量、流动性/成交额、波动率），逗号分隔 3 个数 |
 | `--exchange` | `binance` | 交易所 id（默认 binance，仅支持支持 `defaultType=swap` 的交易所） |
+| `--api-base` | 无 | 币安 API 反代域名（如 `bapi.beasi.top`，替换官方域名 host、保留路径；用于规避地域限制） |
 | `--verbose` | 关 | 输出详细日志 |
 
 ### 子命令：export-data
@@ -231,7 +232,13 @@ cp /freqtrade/coin-select-results/selection_report.csv /freqtrade/user_data_v4/s
 
 - **schedule 延迟**：GitHub 不保证 cron 精确准时，负载高时可能延迟数分钟；`2-59/5` 已错峰避开整点高峰。对 5 分钟级换币场景足够。
 - **commit 噪音**：结果几乎每次微变，一天可能上百个 commit；文件仅几 KB，无影响。如嫌多可后续加"变化超 N 个币才提交"阈值。
-- **币安 451**：若 workflow 在连通性探测步骤失败，说明 GitHub Actions 出口 IP 被币安地域限制，需改用自托管 runner 或代理（首次手动 dispatch 即可验证）。
+- **币安 451 / 地域限制**：GitHub Actions 出口 IP 直连币安可能被拒。已内置反代支持：workflow 通过 `--api-base`（默认 `bapi.beasi.top`）访问币安。**反代必须同时转发 `/api/`（现货）与 `/fapi/`（USDT 永续合约）路径**——选币用的是合约数据，只转发现货会在连通性探测（`/fapi/v1/ping`）步骤失败。Caddy 示例：
+
+```caddy
+handle_path /api/*  { reverse_proxy https://api.binance.com }
+handle_path /fapi/* { reverse_proxy https://fapi.binance.com }
+handle_path /dapi/* { reverse_proxy https://dapi.binance.com }
+```
 - **服务器离线**：workflow 重试 3 次仍失败会标红告警；commit 已在仓库，服务器恢复后 pull 即可补上（也可手动触发一次）。
 - **本地手动模式不受影响**：`file://` 读取方式与手动选币命令照常可用。
 
@@ -270,7 +277,7 @@ docker run --rm -v /root/freqtrade/user_data_v4:/data \
 ### 说明
 
 - 镜像不绑定任何宿主机路径：`--out` / `--data-dir` 由 `docker run` 时通过 `-v` 挂载目录传入
-- 容器需能访问 Binance API（默认 `api3.binance.com`），`docker run` 默认有外网
+- 容器需能访问 Binance API（默认 `api3.binance.com`；受限网络可在命令中加 `--api-base bapi.beasi.top`），`docker run` 默认有外网
 - 本镜像不含 tests（`tests/` 已通过 `.dockerignore` 排除）；单测在宿主机 venv 运行
 - 若需 push 到 Docker Hub：`docker push rekey/coin-selector:latest`
 

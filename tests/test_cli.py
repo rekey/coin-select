@@ -24,7 +24,7 @@ def test_cli_select_top_writes_pairlist(tmp_path: Path, monkeypatch):
             for i in range(500)
         ]
     }
-    monkeypatch.setattr(Fetcher, "__init__", lambda self, exchange=None, rate_limit=0.0, max_retries=0: (setattr(self, "exchange", ex), setattr(self, "rate_limit", 0.0), setattr(self, "max_retries", 0))[2])
+    monkeypatch.setattr(Fetcher, "__init__", lambda self, exchange=None, rate_limit=0.0, max_retries=0, api_base=None: (setattr(self, "exchange", ex), setattr(self, "rate_limit", 0.0), setattr(self, "max_retries", 0))[2])
 
     out_dir = tmp_path / "out"
     rc = main(
@@ -67,7 +67,7 @@ def test_cli_export_data_writes_feather(tmp_path: Path, monkeypatch):
     }
     monkeypatch.setattr(
         Fetcher, "__init__",
-        lambda self, exchange=None, rate_limit=0.0, max_retries=0: (
+        lambda self, exchange=None, rate_limit=0.0, max_retries=0, api_base=None: (
             setattr(self, "exchange", ex),
             setattr(self, "rate_limit", 0.0),
             setattr(self, "max_retries", 0),
@@ -101,7 +101,7 @@ def test_cli_refresh_period_flag(tmp_path: Path, monkeypatch):
     }
     monkeypatch.setattr(
         Fetcher, "__init__",
-        lambda self, exchange=None, rate_limit=0.0, max_retries=0: (
+        lambda self, exchange=None, rate_limit=0.0, max_retries=0, api_base=None: (
             setattr(self, "exchange", ex),
             setattr(self, "rate_limit", 0.0),
             setattr(self, "max_retries", 0),
