@@ -46,7 +46,7 @@ cd /root/freqtrade
 docker compose up -d freqtrade-v4
 ```
 
-容器内 `RemotePairList` 每 1800 秒（30 分钟）自动重新读取 `pairlist.json`，无需重启即可换币。手动更新币列表后，等待一个刷新周期即可看到 whitelist 变化。
+容器内 `RemotePairList` 每 300 秒（5 分钟）自动重新读取 `pairlist.json`，无需重启即可换币。手动更新币列表后，等待一个刷新周期即可看到 whitelist 变化。
 
 ### 3. 回测数据准备（可选）
 
@@ -83,6 +83,7 @@ cd coin-selector
 | `--max-change` | 40.0 | 24h 涨跌幅上限（%），剔除极端暴涨币 |
 | `--timeframe` | `30m` | 打分用 K 线周期 |
 | `--lookback` | 500 | 打分用 K 线根数（30m × 500 ≈ 10.4 天） |
+| `--refresh-period` | 300 | pairlist 刷新周期（秒），与 freqtrade RemotePairList 轮询节奏一致 |
 | `--weights` | `0.45,0.30,0.25` | 权重（趋势/动量、流动性/成交额、波动率），逗号分隔 3 个数 |
 | `--exchange` | `binance` | 交易所 id（默认 binance，仅支持支持 `defaultType=swap` 的交易所） |
 | `--verbose` | 关 | 输出详细日志 |
@@ -135,7 +136,7 @@ top N (默认 30) → pairlist.json
     {
       "method": "RemotePairList",
       "pairlist_url": "file:////freqtrade/user_data/pairlist.json",
-      "refresh_period": 1800,
+      "refresh_period": 300,
       "number_assets": 30,
       "keep_pairlist_on_failure": true
     }
@@ -144,8 +145,95 @@ top N (默认 30) → pairlist.json
 ```
 
 - `pairlist_url` 使用四斜杠 `file:////`：freqtrade 按 `split("file:///", 1)[1]` 解析，三斜杠会吞掉前导 `/` 导致路径错误、容器启动崩溃
-- 每次手动选币后，v4 容器会在下一个刷新周期（默认 1800 秒）自动采用新列表，无需 reload 或重启
+- 每次手动选币后，v4 容器会在下一个刷新周期（默认 300 秒）自动采用新列表，无需 reload 或重启
 - 回测时动态 pairlist 不生效，需先用 `export-whitelist` 导出静态 `pair_whitelist` 快照
+
+> `refresh_period` 需与选币节奏匹配（默认 300 秒 = 5 分钟）。注意 RemotePairList 响应 JSON 里的 `refresh_period` 字段会覆盖容器配置，因此 `pairlist.json` 内的值（由 `--refresh-period` 控制，默认 300）与容器配置需保持一致。
+
+## 自动化选币（GitHub Actions）
+
+仓库公开部署后，GitHub Actions 每 5 分钟自动选币一次，选完通过 curl 触发你服务器上的 webhook 执行 `git pull`，freqtrade 在下一个轮询周期（300 秒）内自动换币，全程无需人工干预。
+
+### 架构
+
+```
+GitHub Actions（公开仓库, 无限免费额度）
+  schedule cron '2-59/5 * * * *'（每 5 分钟, 错峰避开整点）+ 手动 workflow_dispatch
+  │ checkout → pip install . → 币安连通性探测
+  │ python -m coin_selector --out ./out --report ./out/selection_report.csv
+  │ 结果变化才 commit + push (pairlist.json + selection_report.csv)
+  ▼
+curl -X POST <webhook URL> -H "X-Webhook-Token: <token>"（重试 3 次）
+  ▼
+服务器 webhook 端点（adnanh/webhook 等）
+  校验 token → git pull 公开仓库 → cp 到 user_data_v4/
+  ▼
+freqtrade RemotePairList 每 300s 读本地 pairlist.json → whitelist 自动更新
+```
+
+全链路延迟：选币完成 → commit（秒级）→ curl 触发 → git pull（秒级）→ freqtrade 轮询（≤300s），最坏约 5 分钟。git pull 走 git 协议直达 GitHub，无 raw CDN 缓存问题。
+
+### 启用步骤
+
+1. **搭建服务器 webhook 端点**（见下文参考方案），记录 URL 与 token
+2. **配置 GitHub secret**：仓库 Settings → Secrets and variables → Actions，新增 `WEBHOOK_TOKEN`（与服务器端一致）
+3. **填写 URL**：编辑 `webhook.config.json` 的 `url` 字段并 push
+4. **手动验证**：仓库 Actions 页 → select-pairs → Run workflow（workflow_dispatch），观察选币/commit/触发三步日志
+
+未配置 secret 或 URL 为空时，workflow 跳过触发步骤并输出 warning（不影响选币与 commit）。
+
+### 服务器 webhook 参考方案（adnanh/webhook）
+
+```bash
+# 一次性: 预 clone 公开仓库到 /root/freqtrade/coin-select-results
+git clone https://github.com/<owner>/<repo>.git /root/freqtrade/coin-select-results
+
+# 启动 webhook 容器
+docker run -d --name webhook --restart unless-stopped \
+  -v /root/freqtrade:/freqtrade \
+  -v /root/webhook/hooks.yaml:/etc/webhook/hooks.yaml \
+  adnanh/webhook -hooks /etc/webhook/hooks.yaml -verbose
+```
+
+`/root/webhook/hooks.yaml`（chmod 600，token 与 `WEBHOOK_TOKEN` 相同）:
+
+```yaml
+- id: pairlist-updated
+  execute-command: /usr/local/bin/pull-pairlist.sh
+  trigger-rule:
+    match:
+      - type: header-match
+        name: X-Webhook-Token
+        value: <与 WEBHOOK_TOKEN 相同的随机串>
+```
+
+`/usr/local/bin/pull-pairlist.sh`（挂载进容器或内置于镜像）:
+
+```bash
+#!/bin/bash
+set -e
+git -C /freqtrade/coin-select-results pull --ff-only origin main
+cp /freqtrade/coin-select-results/pairlist.json /freqtrade/user_data_v4/pairlist.json
+cp /freqtrade/coin-select-results/selection_report.csv /freqtrade/user_data_v4/selection_report.csv
+```
+
+### 接口契约
+
+| 项 | 约定 |
+|----|------|
+| 方法 | `POST` |
+| 认证 | header `X-Webhook-Token`，与 `WEBHOOK_TOKEN` 一致 |
+| 成功 | 返回 2xx |
+| token 不匹配 | 返回 4xx（workflow 视为失败, 重试 3 次后标红） |
+| 执行失败 | 返回 5xx |
+
+### 说明与故障排查
+
+- **schedule 延迟**：GitHub 不保证 cron 精确准时，负载高时可能延迟数分钟；`2-59/5` 已错峰避开整点高峰。对 5 分钟级换币场景足够。
+- **commit 噪音**：结果几乎每次微变，一天可能上百个 commit；文件仅几 KB，无影响。如嫌多可后续加"变化超 N 个币才提交"阈值。
+- **币安 451**：若 workflow 在连通性探测步骤失败，说明 GitHub Actions 出口 IP 被币安地域限制，需改用自托管 runner 或代理（首次手动 dispatch 即可验证）。
+- **服务器离线**：workflow 重试 3 次仍失败会标红告警；commit 已在仓库，服务器恢复后 pull 即可补上（也可手动触发一次）。
+- **本地手动模式不受影响**：`file://` 读取方式与手动选币命令照常可用。
 
 ## Docker 使用
 
