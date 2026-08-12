@@ -31,10 +31,9 @@ jobs:
 
       - name: 结果变化则提交并推送
         run: |
-          if [ ! -f pairlist.json ] || [ ! -f selection_report.csv ] || \
-             ! diff -q out/pairlist.json pairlist.json >/dev/null 2>&1 || \
-             ! diff -q out/selection_report.csv selection_report.csv >/dev/null 2>&1; then
+          if [ ! -f pairlist.json ] || ! diff -q out/pairlist.json pairlist.json >/dev/null 2>&1; then
             cp out/pairlist.json out/selection_report.csv .
+            git add pairlist.json selection_report.csv
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "ci: 自动选币更新 $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -69,7 +68,7 @@ jobs:
               -X POST "$URL" -H "X-Webhook-Token: $TOKEN" || echo "000")
             echo "触发尝试 $i: HTTP $code"
             [ "$code" != "000" ] && [ "$code" -lt 400 ] && exit 0
-            sleep 10
+            [ "$i" -lt 3 ] && sleep 10
           done
           echo "::error::webhook 触发失败 (最后状态 $code)"
           exit 1
