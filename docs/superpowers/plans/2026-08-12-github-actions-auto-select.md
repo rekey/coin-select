@@ -196,9 +196,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: select-pairs
+  cancel-in-progress: false
+
 jobs:
   select-pairs:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -218,6 +223,7 @@ jobs:
         run: python -m coin_selector --out ./out --report ./out/selection_report.csv
 
       - name: 结果变化则提交并推送
+        id: commit
         run: |
           if [ ! -f pairlist.json ] || ! diff -q out/pairlist.json pairlist.json >/dev/null 2>&1; then
             cp out/pairlist.json out/selection_report.csv .
@@ -226,12 +232,14 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "ci: 自动选币更新 $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             git push
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
             echo "已推送新选币结果"
           else
             echo "选币结果无变化, 跳过 commit"
           fi
 
       - name: 触发服务器更新 (webhook)
+        if: steps.commit.outputs.pushed == 'true'
         env:
           TOKEN: ${{ secrets.WEBHOOK_TOKEN }}
         run: |
@@ -255,7 +263,7 @@ jobs:
             code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 \
               -X POST "$URL" -H "X-Webhook-Token: $TOKEN" || echo "000")
             echo "触发尝试 $i: HTTP $code"
-            [ "$code" != "000" ] && [ "$code" -lt 400 ] && exit 0
+            [ "$code" != "000" ] && [ "$code" -ge 200 ] && [ "$code" -lt 300 ] && exit 0
             [ "$i" -lt 3 ] && sleep 10
           done
           echo "::error::webhook 触发失败 (最后状态 $code)"
