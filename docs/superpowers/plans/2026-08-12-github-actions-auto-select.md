@@ -16,7 +16,7 @@
 - workflow 触发**仅** `schedule` + `workflow_dispatch`；**禁止 push 触发**（Actions 自身 commit 会自触发循环）
 - cron 表达式 `2-59/5 * * * *`（每 5 分钟, 错峰 2 分钟避开整点高峰）
 - webhook 契约: `POST` + header `X-Webhook-Token`；2xx 成功；`webhook.config.json` 只存 URL（公开仓库, token 不得入库）
-- 选币参数对齐默认: `--top 30 --prescreen-size 75 --min-volume 5e6 --max-change 40 --timeframe 30m --lookback 500`
+- 选币参数对齐默认: `--top 30 --prescreen-size 75 --min-volume 5e6 --max-change 40 --timeframe 30m --lookback 1000`
 - 文档与代码注释使用中文（与现有 README/注释一致）
 
 ---

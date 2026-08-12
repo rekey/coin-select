@@ -82,7 +82,7 @@ cd coin-selector
 | `--min-change` | 无 | 24h 涨跌幅下限（可选，不启用则不过滤） |
 | `--max-change` | 40.0 | 24h 涨跌幅上限（%），剔除极端暴涨币 |
 | `--timeframe` | `30m` | 打分用 K 线周期 |
-| `--lookback` | 500 | 打分用 K 线根数（30m × 500 ≈ 10.4 天） |
+| `--lookback` | 1000 | 打分用 K 线根数（30m × 1000 ≈ 20.8 天） |
 | `--refresh-period` | 300 | pairlist 刷新周期（秒），与 freqtrade RemotePairList 轮询节奏一致 |
 | `--weights` | `0.45,0.30,0.25` | 权重（趋势/动量、流动性/成交额、波动率），逗号分隔 3 个数 |
 | `--exchange` | `binance` | 交易所 id（默认 binance，仅支持支持 `defaultType=swap` 的交易所） |
@@ -116,7 +116,7 @@ cd coin-selector
   │  成交量 ≥ min_volume，涨跌幅在 [min_change, max_change] 内
   │  按成交额降序取前 prescreen-size (默认 75)
   ▼
-第二级打分 scorer（每币拉 30m K 线 500 根）
+第二级打分 scorer（每币拉 30m K 线 1000 根）
   │  趋势/动量: EMA20/EMA50 斜率 + 12h ROC
   │  流动性:    区间成交额 sum(close × volume)
   │  波动率:    ATR(14)%（以池中位数为锚，偏离越远分越低）

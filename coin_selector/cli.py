@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--min-change", type=float, default=None, help="24h 涨跌幅下限 (可选)")
     ap.add_argument("--max-change", type=float, default=40.0, help="24h 涨跌幅上限 (默认 40%%)")
     ap.add_argument("--timeframe", default="30m", help="K 线周期 (默认 30m)")
-    ap.add_argument("--lookback", type=int, default=500, help="K 线根数 (默认 500)")
+    ap.add_argument("--lookback", type=int, default=1000, help="K 线根数 (默认 1000)")
     ap.add_argument("--refresh-period", type=int, default=DEFAULT_REFRESH_PERIOD,
                     help=f"pairlist 刷新周期秒数 (默认 {DEFAULT_REFRESH_PERIOD})")
     ap.add_argument("--weights", default="0.45,0.30,0.25", help="权重 趋势,流动性,波动率 (默认 0.45,0.30,0.25)")
