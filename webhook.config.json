@@ -1,0 +1,4 @@
+{
+  "url": "",
+  "comment": "服务器 webhook 端点。留空 = 未启用；搭建好端点后填入 https://你的域名:端口/hooks/pairlist-updated 并 push，下一轮 cron 或手动 dispatch 即生效。token 配置在 GitHub repository secret WEBHOOK_TOKEN (Settings -> Secrets and variables -> Actions)。"
+}
